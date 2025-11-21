@@ -152,3 +152,58 @@ class Hamiltonian(nn.Module):
         p = p + delta_t * self.dp_dt(q, p)
         q = q + delta_t * self.dq_dt(q, p)
         return q, p
+
+
+class HarmonicOscillator(Hamiltonian):
+    """
+    Hamiltonian for a 1D harmonic oscillator.
+
+    This implements a 1D harmonic oscillator H = p^2 / (2m) + k/2 * (q-q0)^2
+    with mass `m`, spring constant `k`, and equilibrium position `q0`.
+
+    Args:
+        mass (float): Mass `m`, default is 1.
+        spring_constant (float): Spring constant `k`, default is 1.
+        equilibrium_position (float): Equilibrium position `q0`, default is 0.
+
+    Raises:
+        ValueError: If any parameter is not float or mass or spring constant are
+            not positive.
+    """
+
+    def __init__(
+        self,
+        mass: float = 1.0,
+        spring_constant: float = 1.0,
+        equilibrium_position: float = 0.0,
+    ):
+        super().__init__()
+        if not isinstance(mass, (float, int)) or mass <= 0:
+            raise ValueError(f"Invalid parameter {mass=:}: must be a positive float.")
+        if not isinstance(spring_constant, (float, int)) or spring_constant <= 0:
+            raise ValueError(
+                f"Invalid parameter {spring_constant=:}: must be a positive float."
+            )
+        if not isinstance(equilibrium_position, (float, int)):
+            raise ValueError(
+                f"Invalid parameter {equilibrium_position=:}: must be a float."
+            )
+        self.mass = torch.as_tensor(mass)
+        self.spring_constant = torch.as_tensor(spring_constant)
+        self.equilibrium_position = torch.as_tensor(equilibrium_position)
+
+    def epot(self, q: torch.Tensor) -> torch.Tensor:
+        """Potential energy V(q) = k/2 * (q-q0)^2."""
+        return 0.5 * self.spring_constant * (q - self.equilibrium_position) ** 2
+
+    def ekin(self, p: torch.Tensor) -> torch.Tensor:
+        """Kinetic energy T(p) = p^2 / (2m)."""
+        return p**2 / (2 * self.mass)
+
+    def forward(self, q: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+        """Total energy H(q, p) = T(p) + V(q)."""
+        if q.shape != q.shape:
+            raise ValueError(
+                f"Incompatible tensors {q.shape=:} ≠ {p.shape=:}: shapes must match."
+            )
+        return self.ekin(p) + self.epot(q)
