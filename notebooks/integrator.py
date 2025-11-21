@@ -138,3 +138,34 @@ class Integrator:
             torch.cat(qt, dim=0),
             torch.cat(pt, dim=0),
         )
+
+
+class SymplecticEuler(Integrator):
+    """
+    Symplectic Euler Integrator.
+
+    This wraps `Hamiltonian.step()` and adds thermostatting.
+    """
+
+    def step(
+        self,
+        q: torch.Tensor,
+        p: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Perform a single time step.
+
+        Args:
+            q (torch.Tensor): Generalized coordinates for one or more realizations,
+                must match `p` in shape.
+            p (torch.Tensor): Generalized momenta for one or more realizations,
+                must match `q` in shape.
+
+        Returns:
+            torch.Tensor: Updated generalized coordinates.
+            torch.Tensor: Updated generalized momenta.
+        """
+        q, p = self.hamiltonian.step(q, p, self.delta_t)
+        if self.use_thermostat:
+            p = self.thermostat(p)
+        return q, p

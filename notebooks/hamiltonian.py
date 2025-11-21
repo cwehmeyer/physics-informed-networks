@@ -209,6 +209,59 @@ class HarmonicOscillator(Hamiltonian):
         return self.ekin(p) + self.epot(q)
 
 
+class DoubleWell(Hamiltonian):
+    """
+    Hamiltonian for a 1D particle in a double well.
+
+    This implements a 1D particle in a double well potential
+    `V(q) = (q - r0) * (q - r1) * (q - r2) * (q - r3)`.
+
+    Args:
+        mass (float): Mass `m`, default is 1.
+        roots (tuple of four floats): Roots of the potential energy function,
+            the default `roots=(-2, 0, 1, 2)` creates an asymmetric double well.
+
+    Raises:
+        ValueError: If any parameter is not float or mass or spring constant are
+            not positive.
+    """
+
+    def __init__(
+        self,
+        mass: float = 1.0,
+        roots: Tuple[float, float, float, float] = (-2, 0, 1, 2),
+    ):
+        super().__init__()
+        if not isinstance(mass, (float, int)) or mass <= 0:
+            raise ValueError(f"Invalid parameter {mass=:}: must be a positive float.")
+        if not isinstance(roots, (tuple, list)) or len(roots) != 4 or not all(isinstance(elem, (int, float)) for elem in roots):
+            raise ValueError(
+                f"Invalid parameter {roots=:}: must be a tuple of four floats."
+            )
+        self.mass = torch.as_tensor(mass)
+        self.roots = torch.as_tensor(roots).reshape(1, 4)
+
+    def epot(self, q: torch.Tensor) -> torch.Tensor:
+        """Potential energy V(q) = (q-r0) * (q-r1) * (q-r2) * (q-r3)."""
+        if q.ndimension() == 0:
+            q = q.view(1, 1)
+        elif q.ndimension() == 1:
+            q = q.view(-1, 1)
+        return torch.prod(q - self.roots, dim=1)
+
+    def ekin(self, p: torch.Tensor) -> torch.Tensor:
+        """Kinetic energy T(p) = p^2 / (2m)."""
+        return p**2 / (2 * self.mass)
+
+    def forward(self, q: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+        """Total energy H(q, p) = T(p) + V(q)."""
+        if q.shape != q.shape:
+            raise ValueError(
+                f"Incompatible tensors {q.shape=:} ≠ {p.shape=:}: shapes must match."
+            )
+        return self.ekin(p) + self.epot(q)
+
+
 class NeuralHamiltonian(Hamiltonian):
     """
     Trainable generic Hamiltonian.
