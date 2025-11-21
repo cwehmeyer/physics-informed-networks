@@ -207,3 +207,68 @@ class HarmonicOscillator(Hamiltonian):
                 f"Incompatible tensors {q.shape=:} ≠ {p.shape=:}: shapes must match."
             )
         return self.ekin(p) + self.epot(q)
+
+
+class NeuralHamiltonian(Hamiltonian):
+    """
+    Trainable generic Hamiltonian.
+
+    This Hamiltonian contains a neural network instead of an analytical
+    implementation. Generalized coordinates and momenta will internally
+    be flattened and concatenated per batch/realization.
+
+    Args:
+        shape (tuple of int): Shape information for the generalized coordinates `q`,
+            single realization only.
+        hidden (int): Number of units in each layer, default is 64.
+
+    Raises:
+        ValueError: If `shape` is not a tuple of positive integers.
+    """
+
+    def __init__(self, shape: Tuple[int, ...], hidden: int = 64):
+        super().__init__()
+        if isinstance(shape, int):
+            shape = (shape,)
+        if not isinstance(shape, tuple) or (
+            not all(isinstance(elem, int) and elem > 0 for elem in shape)
+        ):
+            raise ValueError(
+                f"Invalid parameter {shape=:}: must be a tuple with positive integers."
+            )
+        self.shape = shape
+        self.ndim = len(shape)
+        q_size = torch.prod(torch.tensor(self.shape)).item()
+        self.net = nn.Sequential(
+            nn.Linear(q_size * 2, hidden),
+            nn.Tanh(),
+            nn.Linear(hidden, hidden),
+            nn.Tanh(),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, q: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+        """Compute H(q, p) via forward pass through the net."""
+        if p.shape != q.shape:
+            raise ValueError(
+                f"Incompatible tensors {q.shape=:} ≠ {p.shape=:}: shapes must match."
+            )
+        if q.ndimension() == self.ndim:
+            q = q.unsqueeze(0)
+            p = p.unsqueeze(0)
+            squeeze = True
+        else:
+            squeeze = False
+        if (q.ndimension() != self.ndim + 1) or (q.shape[1:] != self.shape):
+            raise ValueError(
+                f"Incompatible parameter {q.shape[1:]=:} ≠ {self.shape}: "
+                "non-batch dimensions do not match expected shape."
+            )
+        if self.ndim > 1:
+            q = q.view(q.shape[0], -1)
+            p = p.view(p.shape[0], -1)
+        x = torch.cat([q, p], dim=-1)
+        H = self.net(x)
+        if squeeze:
+            H = H.squeeze(0)
+        return H
